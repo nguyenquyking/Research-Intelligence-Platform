@@ -6,11 +6,12 @@ import './index.css';
 
 function App() {
   const [query, setQuery] = useState('');
+  const [isMock, setIsMock] = useState(false);
   const { nodes, rootId, messages, isStreaming, startStream } = useAgentStream();
 
   const handleSend = () => {
     if (!query.trim()) return;
-    startStream(query);
+    startStream(query, isMock);
     setQuery('');
   };
 
@@ -27,7 +28,18 @@ function App() {
             <p className="text-xs text-gray-500">Research Intelligence Platform v1.0</p>
           </div>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          {/* Demo Mode Toggle */}
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:bg-white/10 transition-all cursor-pointer select-none"
+               onClick={() => setIsMock(!isMock)}>
+            <div className={`w-8 h-4 rounded-full relative transition-colors ${isMock ? 'bg-indigo-600' : 'bg-gray-700'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all shadow-sm ${isMock ? 'left-[1.125rem]' : 'left-0.5'}`} />
+            </div>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isMock ? 'text-indigo-400' : 'text-gray-500'}`}>
+              Demo Mode {isMock ? 'ON' : 'OFF'}
+            </span>
+          </div>
+
           <div className="bg-white/5 px-4 py-2 rounded-full border border-white/10 flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
             <span className="text-xs font-semibold text-gray-300">

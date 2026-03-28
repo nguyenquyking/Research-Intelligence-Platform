@@ -40,13 +40,13 @@ export const useAgentStream = () => {
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  const startStream = (query: string) => {
+  const startStream = (query: string, isMock: boolean = false) => {
     setNodes({});
     setRootId(null);
     setMessages(prev => [...prev, { role: 'user', text: query }]);
     setIsStreaming(true);
 
-    const es = new EventSource(`http://localhost:3001/api/stream?q=${encodeURIComponent(query)}`);
+    const es = new EventSource(`http://localhost:3001/api/stream?q=${encodeURIComponent(query)}&mock=${isMock}`);
     eventSourceRef.current = es;
 
     es.onerror = (e) => {
@@ -164,7 +164,13 @@ export const useAgentStream = () => {
       },
       done: () => {
         setIsStreaming(false);
-        es.close();
+        eventSourceRef.current?.close();
+      },
+      error: (data) => {
+        console.error('Agent Error:', data.message);
+        setMessages(prev => [...prev, { role: 'agent', text: `⚠️ Error: ${data.message}` }]);
+        setIsStreaming(false);
+        eventSourceRef.current?.close();
       }
     };
 
