@@ -96,7 +96,7 @@ app.get('/api/stream', (req, res) => {
     let chat = model.startChat();
     let prompt = `User query: "${query}". 
     You are the Lead Analyst. Your mission is to research this topic deeply. 
-    1. Use web_search (multiple times if needed in parallel/sequence) to get data.
+    1. Use web_search (MAX 3 TIMES) to get data. Choose your queries wisely to cover the most important aspects.
     2. Use analyze_data to process findings.
     3. Use write_report to finish.
     4. Communicate your thinking clearly at every step.
@@ -107,6 +107,7 @@ app.get('/api/stream', (req, res) => {
     
     // Process the conversation loop
     let callCount = 0;
+    let webSearchCount = 0;
     while (callCount < 10) { // Safety limit
       const parts = response.response.candidates[0].content.parts;
       
@@ -125,6 +126,20 @@ app.get('/api/stream', (req, res) => {
         const toolId = `sub-${uuidv4().slice(0, 4)}`;
         const toolName = call.functionCall.name;
         
+        // Enforce web_search limit
+        if (toolName === 'web_search') {
+          if (webSearchCount >= 3) {
+            toolResponses.push({
+              functionResponse: {
+                name: toolName,
+                response: { result: "Error: Web search limit reached (3/3). Please proceed with the information you already have." }
+              }
+            });
+            continue;
+          }
+          webSearchCount++;
+        }
+
         // Emit events for the UI
         sendEvent(res, 'agent_start', { id: toolId, name: `Agent: ${toolName}`, parentId: leadId });
         sendEvent(res, 'tool_start', { id: toolId, tool: toolName, input: JSON.stringify(call.functionCall.args) });
