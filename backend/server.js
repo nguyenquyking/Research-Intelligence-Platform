@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { v4: uuidv4 } = require('uuid');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 dotenv.config();
 
@@ -11,9 +12,71 @@ app.use(express.json());
 
 const PORT = 3001;
 
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-2.5-flash",
+  tools: [
+    {
+      functionDeclarations: [
+        {
+          name: "web_search",
+          description: "Search the web for real-time information on a research subtopic.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              query: { type: "string", description: "The specific search query." }
+            },
+            required: ["query"]
+          }
+        },
+        {
+          name: "analyze_data",
+          description: "Extract metrics and generate insights from research findings.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              data: { type: "string", description: "The raw research text to examine." }
+            },
+            required: ["data"]
+          }
+        },
+        {
+          name: "write_report",
+          description: "Synthesize all findings into a final markdown research brief.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: { type: "string", description: "The structured summary of all research." }
+            },
+            required: ["summary"]
+          }
+        }
+      ]
+    }
+  ]
+});
+
 // Helper to send SSE data
 const sendEvent = (res, type, data) => {
   res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+};
+
+// Simulated Tool Logic
+const tools = {
+  web_search: async (args) => {
+    console.log(`Tool EXEC: web_search - ${args.query}`);
+    // Simulated high-quality results based on query
+    return `Results for "${args.query}": Multiple sources confirm rapid growth in AI agents. Anthropic SDK is praised for its safety-first approach and robust hook system. Github shows 15k+ stars.`;
+  },
+  analyze_data: async (args) => {
+    console.log(`Tool EXEC: analyze_data`);
+    return `Data Analysis: Key metrics extracted: 75% developer satisfaction, 45% CAGR growth, 12 major cloud partnerships.`;
+  },
+  write_report: async (args) => {
+    console.log(`Tool EXEC: write_report`);
+    return `Final Brief: Anthropic holds a dominant position in Enterprise Agent SDKs due to its transparency features. Recommendation: Focus on ecosystem integrations.`;
+  }
 };
 
 app.get('/api/stream', (req, res) => {
@@ -23,87 +86,70 @@ app.get('/api/stream', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  console.log(`Starting stream for query: ${query}`);
+  const sessionId = uuidv4();
+  const leadId = 'lead-analyst';
 
-  // Mock Agent Execution
   const runAgent = async () => {
-    const sessionId = uuidv4();
-    
-    // 1. Session Start
     sendEvent(res, 'session_start', { sessionId });
-    await new Promise(r => setTimeout(r, 1000));
-
-    // 2. Lead Analyst Starts Thinking
-    const leadId = 'lead-analyst';
-    sendEvent(res, 'agent_start', { id: leadId, name: 'Lead Analyst', role: 'orchestrator' });
-    sendEvent(res, 'thinking', { id: leadId, text: 'Decomposing the research request into subtopics...' });
-    await new Promise(r => setTimeout(r, 2000));
-
-    // 3. Ask User (Simulated)
-    sendEvent(res, 'ask_user', { 
-      id: leadId, 
-      question: 'Which angle matters most: technical capabilities, developer adoption, or enterprise readiness?' 
-    });
+    sendEvent(res, 'agent_start', { id: leadId, name: 'Lead Analyst (Gemini)', role: 'orchestrator' });
     
-    // In a real app, we'd wait for a POST to /api/answer. 
-    // Here we'll simulate a 3s pause then auto-continue with a mock answer.
-    await new Promise(r => setTimeout(r, 4000));
-    sendEvent(res, 'user_answer', { id: leadId, answer: 'technical capabilities and developer adoption' });
+    let chat = model.startChat();
+    let prompt = `User query: "${query}". 
+    You are the Lead Analyst. Your mission is to research this topic deeply. 
+    1. Use web_search (multiple times if needed in parallel/sequence) to get data.
+    2. Use analyze_data to process findings.
+    3. Use write_report to finish.
+    4. Communicate your thinking clearly at every step.
     
-    sendEvent(res, 'thinking', { id: leadId, text: 'Understood. Spawning parallel researchers...' });
-    await new Promise(r => setTimeout(r, 1500));
+    IMPORTANT: If the query is ambiguous, call 'ask_user' (simulated by sending a thinking block starting with [ASK_USER]).`;
 
-    // 4. Parallel Researchers
-    const r1Id = 'researcher-1';
-    const r2Id = 'researcher-2';
+    let response = await chat.sendMessage(prompt);
+    
+    // Process the conversation loop
+    let callCount = 0;
+    while (callCount < 10) { // Safety limit
+      const parts = response.response.candidates[0].content.parts;
+      
+      // Handle Thoughts
+      const textParts = parts.filter(p => p.text).map(p => p.text).join('\n');
+      if (textParts) {
+        sendEvent(res, 'thinking', { id: leadId, text: textParts });
+      }
 
-    // Start both
-    sendEvent(res, 'agent_start', { id: r1Id, name: 'Web Researcher (SDKs)', parentId: leadId });
-    sendEvent(res, 'agent_start', { id: r2Id, name: 'Web Researcher (Market)', parentId: leadId });
+      // Handle Function Calls
+      const calls = parts.filter(p => p.functionCall);
+      if (calls.length === 0) break;
 
-    // Concurrent thinking
-    sendEvent(res, 'thinking', { id: r1Id, text: 'Searching for Anthropic SDK documentation and GitHub trends...' });
-    sendEvent(res, 'thinking', { id: r2Id, text: 'Analyzing market share and VC funding data...' });
-    await new Promise(r => setTimeout(r, 2000));
+      const toolResponses = [];
+      for (const call of calls) {
+        const toolId = `sub-${uuidv4().slice(0, 4)}`;
+        const toolName = call.functionCall.name;
+        
+        // Emit events for the UI
+        sendEvent(res, 'agent_start', { id: toolId, name: `Agent: ${toolName}`, parentId: leadId });
+        sendEvent(res, 'tool_start', { id: toolId, tool: toolName, input: JSON.stringify(call.functionCall.args) });
+        
+        // Execute real tool logic
+        const result = await (tools[toolName] ? tools[toolName](call.functionCall.args) : "Unknown tool");
+        
+        sendEvent(res, 'tool_end', { id: toolId, tool: toolName, output: result });
+        sendEvent(res, 'agent_end', { id: toolId, output: result });
 
-    // Tool use
-    sendEvent(res, 'tool_start', { id: r1Id, tool: 'WebSearch', input: 'claude agent sdk github stars' });
-    await new Promise(r => setTimeout(r, 1000));
-    sendEvent(res, 'tool_end', { id: r1Id, tool: 'WebSearch', output: 'Found 15k+ stars and 200+ forks across ecosystem.' });
+        toolResponses.push({
+          functionResponse: {
+            name: toolName,
+            response: { result }
+          }
+        });
+      }
 
-    sendEvent(res, 'tool_start', { id: r2Id, tool: 'WebSearch', input: 'AI agent framework market size 2024' });
-    await new Promise(r => setTimeout(r, 1500));
-    sendEvent(res, 'tool_end', { id: r2Id, tool: 'WebSearch', output: 'Market projected to grow 45% CAGR.' });
+      // Send results back to Gemini to continue reasoning
+      response = await chat.sendMessage(toolResponses);
+      callCount++;
+    }
 
-    // Researchers finish
-    sendEvent(res, 'agent_end', { id: r1Id, output: 'SDK adoption is growing rapidly among early adopters.' });
-    sendEvent(res, 'agent_end', { id: r2Id, output: 'Enterprise interest is high but production deployments are still scaling.' });
-    await new Promise(r => setTimeout(r, 1000));
-
-    // 5. Data Analyst
-    const daId = 'data-analyst';
-    sendEvent(res, 'agent_start', { id: daId, name: 'Data Analyst', parentId: leadId });
-    sendEvent(res, 'thinking', { id: daId, text: 'Extracting metrics from research notes...' });
-    await new Promise(r => setTimeout(r, 2000));
-    sendEvent(res, 'tool_start', { id: daId, tool: 'Bash', input: 'python3 generate_chart.py' });
-    await new Promise(r => setTimeout(r, 1000));
-    sendEvent(res, 'artifact', { id: daId, name: 'adoption_chart.png', type: 'image', content: 'Charts generated' });
-    sendEvent(res, 'tool_end', { id: daId, tool: 'Bash', output: 'Chart saved to artifacts.' });
-    sendEvent(res, 'agent_end', { id: daId, output: 'Extracted 5 key metrics.' });
-
-    // 6. Final Report
-    const rwId = 'report-writer';
-    sendEvent(res, 'agent_start', { id: rwId, name: 'Report Writer', parentId: leadId });
-    sendEvent(res, 'thinking', { id: rwId, text: 'Synthesizing final brief...' });
-    await new Promise(r => setTimeout(r, 2000));
-    sendEvent(res, 'artifact', { id: rwId, name: 'research_brief.md', type: 'markdown', content: '# Final Research Brief\n\n...' });
-    sendEvent(res, 'agent_end', { id: rwId, output: 'Report finished.' });
-
-    // 7. Lead Response
-    sendEvent(res, 'agent_response', { id: leadId, text: 'The research is complete. I found that Anthropic has a strong technical edge but faces stiff competition in developer mindshare.' });
+    sendEvent(res, 'agent_response', { id: leadId, text: response.response.text() });
     sendEvent(res, 'done', { sessionId });
-    
-    console.log('Stream finished.');
     res.end();
   };
 
@@ -115,5 +161,5 @@ app.get('/api/stream', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Real Gemini Server running at http://localhost:${PORT}`);
 });

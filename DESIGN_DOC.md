@@ -7,13 +7,15 @@
 ## Tenets
 - **Transparency First**: Every thought, tool call, and sub-agent spawn must be visible in real-time.
 - **Hierarchical Clarity**: Nested agent relationships must be rendered as a clear parent-child tree.
-- **Premium UX**: A professional "command center" aesthetic that feels alive and responsive.
+- **Model Agnostic Backend**: The backend is architected to support both Claude (via SDK) and Gemini (via direct bridge), while maintaining a unified event schema.
 
 ## Problem
 AI agents are often "black boxes." When an orchestrator spawns multiple sub-agents, the user sees a single loading spinner or a flat text response. This makes it impossible to debug, audit, or trust the agent's complex reasoning and parallel work.
 
 ## Proposed Solution
-A full-stack application that decodes the Claude Agent SDK's event stream into a reactive, hierarchical UI. We use a recursive "Trace Tree" component that grows dynamically as events arrive, clearly separating the Lead Analyst from its specialist researchers.
+A full-stack application that decodes agentic event streams into a reactive, hierarchical UI. We use a recursive "Trace Tree" component that grows dynamically as events arrive, clearly separating the Lead Analyst from its specialist researchers. 
+
+The current implementation is powered by **Gemini 2.5 Flash**, mapping its function-calling events into the visual "Claude Trace Tree" interaction patterns.
 
 ## Goals
 - Handle flat SSE event streams and reconstruct a nested agent DAG.
