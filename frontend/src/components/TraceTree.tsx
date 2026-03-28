@@ -6,9 +6,11 @@ interface TraceNodeProps {
   id: string;
   nodes: Record<string, AgentNode>;
   depth: number;
+  onSelectTool: (name: string, output: string) => void;
+  onSelectArtifact: (name: string, content: string) => void;
 }
 
-const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth }) => {
+const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth, onSelectTool, onSelectArtifact }) => {
   const node = nodes[id];
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -56,7 +58,9 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth }) => {
           {node.tools.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {node.tools.map((tool, idx) => (
-                <div key={idx} className="bg-blue-900/20 border border-blue-800/50 rounded px-2 py-1 text-xs flex items-center gap-2">
+                <div key={idx} 
+                     onClick={(e) => { e.stopPropagation(); onSelectTool(tool.name, tool.output); }}
+                     className="bg-blue-900/20 border border-blue-800/50 rounded px-2 py-1 text-xs flex items-center gap-2 cursor-pointer hover:bg-blue-800/40">
                   <Database size={12} className="text-blue-400" />
                   <span className="text-blue-200">{tool.name}</span>
                   {tool.output && <div className="w-1 h-1 bg-green-400 rounded-full" />}
@@ -69,9 +73,14 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth }) => {
           {node.artifacts.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {node.artifacts.map((art, idx) => (
-                <div key={idx} className="bg-indigo-900/20 border border-indigo-800/50 rounded px-2 py-1 text-xs flex items-center gap-2 cursor-pointer hover:bg-indigo-800/40">
+                <div key={idx} 
+                     onClick={(e) => { e.stopPropagation(); onSelectArtifact(art.name, art.content); }}
+                     className="bg-indigo-900/20 border border-indigo-800/50 rounded px-2 py-1 text-xs flex items-center gap-2 cursor-pointer hover:bg-indigo-800/40 translate-y-0 hover:-translate-y-0.5 transition-transform duration-200">
                   <FileText size={12} className="text-indigo-400" />
-                  <span className="text-indigo-200">{art.name}</span>
+                  <span className="text-indigo-200 font-medium">{art.name}</span>
+                  <div className="flex gap-0.5">
+                    <div className="w-1 h-1 bg-indigo-400 rounded-full animate-pulse" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -96,7 +105,14 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth }) => {
           {/* Children nodes (Recursive) */}
           <div className="pt-2">
             {node.subAgents.map(childId => (
-              <TraceNode key={childId} id={childId} nodes={nodes} depth={depth + 1} />
+              <TraceNode 
+                key={childId} 
+                id={childId} 
+                nodes={nodes} 
+                depth={depth + 1} 
+                onSelectTool={onSelectTool}
+                onSelectArtifact={onSelectArtifact}
+              />
             ))}
           </div>
         </div>
@@ -105,12 +121,23 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth }) => {
   );
 };
 
-export const TraceTree: React.FC<{ rootId: string | null; nodes: Record<string, AgentNode> }> = ({ rootId, nodes }) => {
+export const TraceTree: React.FC<{ 
+  rootId: string | null; 
+  nodes: Record<string, AgentNode>;
+  onSelectTool: (name: string, output: string) => void;
+  onSelectArtifact: (name: string, content: string) => void;
+}> = ({ rootId, nodes, onSelectTool, onSelectArtifact }) => {
   if (!rootId) return <div className="text-gray-500 italic p-4">No active trace...</div>;
   return (
     <div className="p-4 overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
       <div className="text-xs uppercase text-gray-500 mb-4 tracking-tighter">Live Execution Trace</div>
-      <TraceNode id={rootId} nodes={nodes} depth={0} />
+      <TraceNode 
+        id={rootId} 
+        nodes={nodes} 
+        depth={0} 
+        onSelectTool={onSelectTool}
+        onSelectArtifact={onSelectArtifact}
+      />
     </div>
   );
 };

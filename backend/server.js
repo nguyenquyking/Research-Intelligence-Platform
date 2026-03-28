@@ -62,20 +62,86 @@ const sendEvent = (res, type, data) => {
   res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
 };
 
-// Simulated Tool Logic
+// Dynamic Search Mock Helper
+const getDynamicSearchResult = (query) => {
+  const q = query.toLowerCase();
+  
+  if (q.includes('finance') || q.includes('financial')) {
+    return `Results for Financial AI: BloombergGPT (50B parameters) outperforms GPT-4 on finance benchmarks by 12%. 
+    FinBERT is the gold standard for sentiment analysis. Other notable models include Finance-LLM from NVIDIA and 
+    specialized RAG implementations by J.P. Morgan and Goldman Sachs (2024).`;
+  }
+  
+  if (q.includes('health') || q.includes('medical') || q.includes('doctor')) {
+    return `Results for Healthcare AI: Med-PaLM 2 (Google) achieved 86.5% on USMLE-style questions. 
+    BioBERT and ClinicalBERT are widely used for clinical entity recognition. IBM Watson Health is 
+    undergoing a transition to generative agentic workflows for diagnostic support (2024).`;
+  }
+
+  if (q.includes('ai agent') || q.includes('research agent') || q.includes('agentic')) {
+    return `Results for AI Agents: CrewAI, AutoGPT, and LangChain Agents are leading the open-source space. 
+    Enterprise growth is focused on "Transparent Agents" (Trace Trees). Anthropic Claude 3.1 and 
+    Gemini 2.5 Flash show superior function-calling reliability.`;
+  }
+
+  return `Results for "${query}": Multiple sources confirm rapid growth in ${query}. 
+  Industry leaders are adopting agentic workflows to increase efficiency by 25-40% in 2024. 
+  Transparency and real-time tracing are cited as top-3 requirements by 85% of CTOs.`;
+};
+
+// Real Agentic Tool Logic (Powered by Gemini)
 const tools = {
   web_search: async (args) => {
     console.log(`Tool EXEC: web_search - ${args.query}`);
-    // Simulated high-quality results based on query
-    return `Results for "${args.query}": Multiple sources confirm rapid growth in AI agents. Anthropic SDK is praised for its safety-first approach and robust hook system. Github shows 15k+ stars.`;
+    try {
+      const toolModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const prompt = `Act as a high-speed web researcher. Provide a detailed, factual summary of current (2024-2025) information regarding: "${args.query}". 
+      Include specific company names, technical specs, and market numbers. Format as a concise research snippet.`;
+      
+      const result = await toolModel.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      console.error("WEB_SEARCH_TOOL_ERROR:", e.message);
+      return `Search failed for "${args.query}". Error: ${e.message}`;
+    }
   },
   analyze_data: async (args) => {
     console.log(`Tool EXEC: analyze_data`);
-    return `Data Analysis: Key metrics extracted: 75% developer satisfaction, 45% CAGR growth, 12 major cloud partnerships.`;
+    try {
+      const toolModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const prompt = `Act as a Senior Data Analyst. Extract and summarize the key quantitative metrics and strategic insights from the following raw research text:
+      
+      "${args.data}"
+      
+      Output in a clear, bulleted list.`;
+      
+      const result = await toolModel.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      console.error("ANALYZE_DATA_TOOL_ERROR:", e.message);
+      return `Analysis failed. Error: ${e.message}`;
+    }
   },
   write_report: async (args) => {
     console.log(`Tool EXEC: write_report`);
-    return `Final Brief: Anthropic holds a dominant position in Enterprise Agent SDKs due to its transparency features. Recommendation: Focus on ecosystem integrations.`;
+    try {
+      const toolModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const prompt = `Act as the Lead Report Writer. Synthesize all the following research findings into a final, professional, and visually appealing markdown research brief:
+      
+      "${args.summary}"
+      
+      Structure:
+      # Executive Summary
+      ## Key Findings
+      ## Future Outlook
+      ## Strategic Recommendations`;
+      
+      const result = await toolModel.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      console.error("WRITE_REPORT_TOOL_ERROR:", e.message);
+      return `Report generation failed. Error: ${e.message}`;
+    }
   }
 };
 
@@ -105,11 +171,43 @@ app.get('/api/stream', (req, res) => {
 
     let response = await chat.sendMessage(prompt);
     
-    // Process the conversation loop
+// Helper to safely extract parts from Gemini response
+const getSafeContentParts = (response) => {
+  try {
+    return response.response.candidates?.[0]?.content?.parts || [];
+  } catch (e) {
+    console.warn("SAFE_PARTS_WARN: Could not extract parts", e.message);
+    return [];
+  }
+};
+
+// Helper to safely extract text from Gemini response
+const getSafeText = (response) => {
+  try {
+    return response.response.text();
+  } catch (e) {
+    console.warn("SAFE_TEXT_WARN: Could not extract text", e.message);
+    const candidate = response.response.candidates?.[0];
+    if (candidate?.finishReason === 'SAFETY') return "⚠️ Content blocked by safety filters.";
+    if (candidate?.finishReason === 'RECITATION') return "⚠️ Content blocked due to recitation/copyright.";
+    return "⚠️ System error: No text returned from model.";
+  }
+};
+
+// Process the conversation loop
     let callCount = 0;
     let webSearchCount = 0;
     while (callCount < 10) { // Safety limit
-      const parts = response.response.candidates[0].content.parts;
+      const parts = getSafeContentParts(response);
+      
+      if (parts.length === 0) {
+        // Check if there was a safety block or other error
+        const candidate = response.response.candidates?.[0];
+        if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+          sendEvent(res, 'thinking', { id: leadId, text: `⚠️ Agent paused: ${candidate.finishReason}` });
+          break;
+        }
+      }
       
       // Handle Thoughts
       const textParts = parts.filter(p => p.text).map(p => p.text).join('\n');
@@ -146,15 +244,33 @@ app.get('/api/stream', (req, res) => {
         sendEvent(res, 'tool_start', { id: toolId, tool: toolName, input: JSON.stringify(call.functionCall.args) });
         
         // Execute real tool logic
-        const result = await (tools[toolName] ? tools[toolName](call.functionCall.args) : "Unknown tool");
+        const tool = tools[toolName];
+        const output = await tool(call.functionCall.args);
+        sendEvent(res, 'tool_end', { id: toolId, tool: toolName, output: output });
+        sendEvent(res, 'agent_end', { id: toolId, output: output });
         
-        sendEvent(res, 'tool_end', { id: toolId, tool: toolName, output: result });
-        sendEvent(res, 'agent_end', { id: toolId, output: result });
+        // Emit internal artifact for specific high-value tools
+        if (toolName === 'write_report') {
+          sendEvent(res, 'artifact', { 
+            id: leadId, 
+            name: 'Final Research Brief', 
+            type: 'report', 
+            content: output 
+          });
+        }
+        if (toolName === 'analyze_data') {
+          sendEvent(res, 'artifact', { 
+            id: leadId, 
+            name: 'Data Analysis results', 
+            type: 'analysis', 
+            content: output 
+          });
+        }
 
         toolResponses.push({
           functionResponse: {
             name: toolName,
-            response: { result }
+            response: { result: output }
           }
         });
       }
@@ -167,7 +283,7 @@ app.get('/api/stream', (req, res) => {
       callCount++;
     }
 
-    sendEvent(res, 'agent_response', { id: leadId, text: response.response.text() });
+    sendEvent(res, 'agent_response', { id: leadId, text: getSafeText(response) });
     sendEvent(res, 'done', { sessionId });
     res.end();
   };

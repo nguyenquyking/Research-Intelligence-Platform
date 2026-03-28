@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, Search, Terminal, Layers, Box, Info } from 'lucide-react';
+import { Send, Search, Terminal, Layers, Box, Info, X, FileText } from 'lucide-react';
 import { useAgentStream } from './hooks/useAgentStream';
 import { TraceTree } from './components/TraceTree';
 import './index.css';
@@ -7,6 +7,7 @@ import './index.css';
 function App() {
   const [query, setQuery] = useState('');
   const [isMock, setIsMock] = useState(false);
+  const [selectedArtifact, setSelectedArtifact] = useState<{name: string, content: string} | null>(null);
   const { nodes, rootId, messages, isStreaming, startStream } = useAgentStream();
 
   const handleSend = () => {
@@ -16,7 +17,7 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#0d1117] text-white overflow-hidden p-4 gap-4">
+    <div className="flex flex-col h-screen w-screen bg-[#0d1117] text-white overflow-hidden p-4 gap-4 relative">
       {/* Header */}
       <header className="flex items-center justify-between p-4 glass rounded-lg h-[80px]">
         <div className="flex items-center gap-3">
@@ -113,7 +114,12 @@ function App() {
                 <Info size={14} className="text-gray-600 hover:text-gray-400 cursor-help" />
               </div>
             </div>
-            <TraceTree rootId={rootId} nodes={nodes} />
+            <TraceTree 
+              rootId={rootId} 
+              nodes={nodes} 
+              onSelectTool={(name, output) => setSelectedArtifact({ name, content: output })}
+              onSelectArtifact={(name, content) => setSelectedArtifact({ name, content })}
+            />
           </div>
         </div>
       </div>
@@ -131,6 +137,33 @@ function App() {
           <span>Quy Nguyen</span>
         </div>
       </footer>
+
+      {/* Artifact Modal */}
+      {selectedArtifact && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-8 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
+          <div className="bg-[#161b22] border border-white/10 rounded-2xl w-full max-w-4xl h-full flex flex-col shadow-2xl overflow-hidden shadow-indigo-500/10">
+            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
+              <div className="flex items-center gap-2">
+                <FileText size={20} className="text-indigo-400" />
+                <h3 className="text-lg font-bold text-gray-100">{selectedArtifact.name}</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedArtifact(null)}
+                className="p-1 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+              <div className="prose prose-invert max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-gray-300 leading-relaxed text-sm">
+                  {selectedArtifact.content || 'Generating content... Please wait.'}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
