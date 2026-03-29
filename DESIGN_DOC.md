@@ -1,46 +1,42 @@
-# Design Document: Deep Analyst Research Platform
+# Deep Analyst: Research Intelligence Platform (v2.0)
+**Technical Design Document • 1-Pager**
 
-**Title:** Real-time Transparent Agentic Reasoning System
-**Author:** Quy Nguyen
-**Date:** 2026-03-28
+## 1. Executive Summary
+Deep Analyst is a high-performance, agentic research workstation designed to transform vague research queries into structured intelligence reports. It features a real-time "Execution Trace" for transparency, an interactive sub-agent flow for human-in-the-loop decision-making, and a persistent artifact library for report management.
 
-## Tenets
-- **Transparency First**: Every thought, tool call, and sub-agent spawn must be visible in real-time.
-- **Hierarchical Clarity**: Nested agent relationships must be rendered as a clear parent-child tree.
-- **Model Agnostic Backend**: The backend is architected to support both Claude (via SDK) and Gemini (via direct bridge), while maintaining a unified event schema.
+## 2. System Architecture
 
-## Problem
-AI agents are often "black boxes." When an orchestrator spawns multiple sub-agents, the user sees a single loading spinner or a flat text response. This makes it impossible to debug, audit, or trust the agent's complex reasoning and parallel work.
+### Frontend (React + Vite + TS)
+- **State Orchestration**: Custom `useAgentStream` hook manages Server-Sent Events (SSE), mapping incoming tool-calls and thinking steps to a dynamic `TraceNode` tree.
+- **Layout**: A robust 12-column Grid system (Tailwind CSS) enforcing an `overflow-hidden` root with independent internal scrollable panels for Trace, Workspace, and Library.
+- **UI Components**:
+    - **TraceTree**: Recursive visualization of agent orchestration.
+    - **Context Workspace**: Real-time terminal for agent synthesis and human interaction.
+    - **Artifact Viewer**: Modal-driven Markdown renderer with perfect text wrapping and download capabilities.
 
-## Proposed Solution
-A full-stack application that decodes agentic event streams into a reactive, hierarchical UI. We use a recursive "Trace Tree" component that grows dynamically as events arrive, clearly separating the Lead Analyst from its specialist researchers. 
+### Backend (Node.js + Express)
+- **Agent Logic**: Asynchronous orchestration loop utilizing Gemini 1.5 Flash for rapid tool selection and reasoning.
+- **Streaming Engine**: SSE-based event emitter sending granular events (`agent_start`, `thinking`, `tool_end`, `artifact`) to keep the UI in sync with the agent's "brain".
+- **Toolbox**: Integration with Web Search and Data Analysis mock/real engines.
 
-The current implementation is powered by **Gemini 2.5 Flash**, mapping its function-calling events into the visual "Claude Trace Tree" interaction patterns.
+## 3. Engineering Key Decisions
 
-## Goals
-- Handle flat SSE event streams and reconstruct a nested agent DAG.
-- Support parallel sub-agent execution visualization.
-- Implement the `ask_user` interaction pattern without breaking the stream.
-- Collect and display artifacts (research notes, charts) produced by sub-agents.
+### A. Granular Execution Transparency
+**Problem**: Traditional AI agents act as a "black box" until the final result.
+**Solution**: Implemented tool-specific `thinking` events. Each node in the execution tree displays its own sub-steps (e.g., "🔍 Scanning...", "✅ Data Parsed"), providing 100% visibility into the agent's logic.
 
-## Non-goals
-- Building the LLM models (we consume the SDK).
-- Long-term persistent database (sessions are handled in-memory for the demo).
+### B. Scrolling Layout Stability
+**Problem**: Fixed layouts often break when research sessions exceed the viewport.
+**Solution**: Adopted a strict Flexbox hierarchy (`h-full min-h-0 overflow-hidden` -> `flex-1 overflow-y-auto`). This prevents the entire page from scrolling and preserves context across all three workstation columns.
 
-## Implementation Details
+### C. Quota & Performance Optimization
+**Problem**: High frequency of LLM calls can exhaust API quotas rapidly.
+**Solution**: Refactored the orchestration loop to prioritize direct tool outputs for UI feedback, only calling the LLM when context synthesization or a final report is required.
 
-### Single vs. Multiple Messages
-The system supports sequential messages in the chat panel, each triggering a fresh trace run in the Trace Tree.
+## 4. Key Deliverables
+1. **Interactive Agent Loop**: Capability to pause mid-run to ask the user clarifying questions.
+2. **Infinite Artifact Gallery**: Automatic categorization and persistent storage of research output.
+3. **Execution Tree (Trace)**: High-fidelity visual history of every tool call.
 
-### Parallel Agent Appearance
-Sub-agents with the same `parentId` are rendered as siblings under the parent node, each with its own status indicator and progress line.
-
-### ask_user Flow
-When a `pause` event arrives, the specific agent node highlights in yellow. The user provides input via the chat, which is then sent back to the server to resume the stream.
-
-### Artifact Surfacing
-Tool outputs that generate files are tagged as "artifacts" and pinned to the specific agent node that created them, allowing the user to view the intermediate work.
-
-## Open Questions
-- **Persistence**: Should we store the full trace for all historical sessions? (Currently: Local state only).
-- **Control**: Should the user be able to "kill" a specific sub-agent node manually? (Currently: Automatic lifecycle).
+---
+*Developed by Nguyen Quy Architecture • March 2026*
