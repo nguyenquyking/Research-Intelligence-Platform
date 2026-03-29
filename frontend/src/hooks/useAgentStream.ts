@@ -105,7 +105,17 @@ export const useAgentStream = () => {
         setMessages(prev => [...prev, { role: 'user', text: `Answer: ${data.answer}` }]);
         break;
       case 'agent_response':
+        setNodes(curr => curr[data.id] ? ({
+          ...curr,
+          [data.id]: { ...curr[data.id], status: 'completed', response: data.text }
+        }) : curr);
         setMessages(prev => [...prev, { role: 'agent', text: data.text }]);
+        break;
+      case 'agent_end':
+        setNodes(curr => curr[data.id] || curr[data.parentId] ? ({
+          ...curr,
+          [data.id || data.parentId]: { ...curr[data.id || data.parentId], status: 'completed' }
+        }) : curr);
         break;
       case 'artifact':
         setNodes(curr => curr[data.id] ? {
@@ -114,6 +124,13 @@ export const useAgentStream = () => {
         } : curr);
         break;
       case 'done':
+        setNodes(curr => {
+          const updated = { ...curr };
+          Object.keys(updated).forEach(id => {
+            if (updated[id].status === 'running') updated[id].status = 'completed';
+          });
+          return updated;
+        });
         setIsStreaming(false);
         break;
       case 'error':

@@ -196,6 +196,8 @@ async function orchestrate(res, chat, sessionId, leadId, initialResponse = null)
         continue;
       }
 
+      sendEvent(res, 'thinking', { id: toolId, text: `🔍 Running tool: ${toolName}...` });
+      
       const tool = tools[toolName];
       let output;
       if (toolName === 'write_report') {
@@ -203,6 +205,9 @@ async function orchestrate(res, chat, sessionId, leadId, initialResponse = null)
       } else {
         output = await (tool ? tool(call.functionCall.args) : `Error: Unknown tool ${toolName}`);
       }
+      
+      const outputPreview = typeof output === 'string' ? `${output.substring(0, 50)}...` : 'Success';
+      sendEvent(res, 'thinking', { id: toolId, text: `✅ ${toolName} complete: ${outputPreview}` });
       
       sendEvent(res, 'tool_end', { id: toolId, tool: toolName, output: output });
       sendEvent(res, 'agent_end', { id: toolId, output: output });

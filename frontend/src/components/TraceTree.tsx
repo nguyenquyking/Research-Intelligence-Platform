@@ -27,18 +27,21 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth, onSelectTool, o
         </div>
         
         <div className={`
-          p-1.5 rounded-lg 
-          ${node.status === 'completed' ? 'text-green-500' : 
-            node.status === 'running' ? 'text-blue-500 animate-pulse' : 
-            node.status === 'paused' ? 'text-yellow-500' : 'text-gray-600'}
+          p-1.5 rounded-lg transition-colors
+          ${node.status === 'completed' ? 'text-green-500 bg-green-500/10' : 
+            node.status === 'running' ? 'text-blue-500 animate-pulse bg-blue-500/10' : 
+            node.status === 'paused' ? 'text-yellow-500 bg-yellow-500/10' : 'text-gray-600 bg-white/5'}
         `}>
-          {node.status === 'completed' ? <CheckCircle size={14} /> : 
+          {node.status === 'completed' ? <CheckCircle size={14} className="animate-in zoom-in duration-300" /> : 
            node.status === 'running' ? <Loader2 size={14} className="animate-spin" /> : 
            node.status === 'paused' ? <Pause size={14} /> : <Play size={14} />}
         </div>
 
         <div className="flex flex-col">
-          <span className="font-bold text-[11px] text-gray-200 uppercase tracking-wider">{node.name}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[11px] text-gray-200 uppercase tracking-wider">{node.name}</span>
+            {node.status === 'completed' && <span className="text-[9px] text-green-500/70 font-black uppercase">Ready</span>}
+          </div>
           <span className="text-[9px] text-gray-600 font-mono tracking-tight">{node.role}</span>
         </div>
       </div>
@@ -49,7 +52,7 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth, onSelectTool, o
           {node.thinking.length > 0 && (
             <div className="space-y-1">
               {node.thinking.map((t, idx) => (
-                <div key={idx} className="thinking-step">
+                <div key={idx} className="thinking-step break-all">
                   {t}
                 </div>
               ))}
@@ -122,7 +125,7 @@ export const TraceTree: React.FC<{
 }> = ({ rootId, nodes, onSelectTool, onSelectArtifact }) => {
   if (!rootId) return <div className="text-gray-500 italic p-4">No active trace...</div>;
   return (
-    <div className="p-4 overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
+    <div className="p-4 min-h-0">
       <div className="text-xs uppercase text-gray-500 mb-4 tracking-tighter">Live Execution Trace</div>
       <TraceNode 
         id={rootId} 

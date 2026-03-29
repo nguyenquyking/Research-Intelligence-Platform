@@ -76,12 +76,12 @@ function App() {
       <main className="flex-1 grid grid-cols-12 gap-5 min-h-0">
         
         {/* Left: Trace Panel (3 cols) */}
-        <div className="col-span-3 flex flex-col glass-dark rounded-2xl border-white/5 overflow-hidden shadow-lg">
-          <div className="border-b border-white/10 p-4 flex items-center gap-3 bg-white/5">
+        <div className="col-span-3 flex flex-col glass-dark rounded-2xl border-white/5 overflow-hidden shadow-lg h-full min-h-0">
+          <div className="border-b border-white/10 p-4 flex items-center gap-3 bg-white/5 shrink-0">
             <Activity size={16} className="text-indigo-400" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Execution Trace</span>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
             <TraceTree 
               rootId={rootId} 
               nodes={nodes} 
@@ -92,7 +92,7 @@ function App() {
         </div>
 
         {/* Middle: Research Workspace (6 cols) */}
-        <div className="col-span-6 flex flex-col gap-5 min-w-0">
+        <div className="col-span-6 flex flex-col gap-5 min-w-0 h-full min-h-0">
           
           {/* Error Banner */}
           {error && (
@@ -132,13 +132,13 @@ function App() {
           </div>
 
           {/* Context Feed */}
-          <div className="flex-1 glass-dark rounded-2xl border-white/5 flex flex-col overflow-hidden relative shadow-inner">
-            <div className="border-b border-white/5 p-4 flex items-center gap-3 bg-white/5">
+          <div className="flex-1 glass-dark rounded-2xl border-white/5 flex flex-col overflow-hidden relative shadow-inner min-h-0">
+            <div className="border-b border-white/5 p-4 flex items-center gap-3 bg-white/5 shrink-0">
               <Terminal size={14} className="text-indigo-400" />
               <span className="text-[10px] font-black uppercase tracking-[0.20em] text-gray-400">Context Workspace</span>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar min-h-0">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-10">
                   <Box size={80} strokeWidth={1} className="mb-4" />
@@ -204,17 +204,18 @@ function App() {
         </div>
 
         {/* Right: Results Gallery (3 cols) */}
-        <div className="col-span-3 flex flex-col glass-dark rounded-2xl border-white/5 overflow-hidden shadow-lg">
+        <div className="col-span-3 flex flex-col glass-dark rounded-2xl border-white/5 overflow-hidden shadow-lg h-full min-h-0">
           <div className="border-b border-white/10 p-4 flex items-center justify-between bg-white/5">
             <div className="flex items-center gap-3">
               <Archive size={16} className="text-indigo-400" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Library</span>
             </div>
           </div>
-          <ReportGallery 
-            nodes={nodes} 
-            onSelectReport={(name, content) => setSelectedArtifact({ name, content })}
-          />
+          <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+            <ReportGallery 
+              nodes={nodes} 
+              onSelectReport={(name, content) => setSelectedArtifact({ name, content })}
+            />
+          </div>
         </div>
 
       </main>
@@ -254,8 +255,8 @@ function App() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar bg-black/60 min-h-0">
-              <pre className="whitespace-pre-wrap font-mono text-indigo-400/80 leading-relaxed text-sm p-8 bg-[#0d1117]/50 rounded-2xl border border-white/5">
+            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar bg-black/60 min-h-0 w-full">
+              <pre className="whitespace-pre-wrap break-words font-mono text-indigo-400/80 leading-relaxed text-sm p-8 bg-[#0d1117]/50 rounded-2xl border border-white/5 max-w-full">
                 {selectedArtifact.content}
               </pre>
             </div>
