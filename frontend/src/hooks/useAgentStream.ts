@@ -37,29 +37,18 @@ export const useAgentStream = () => {
   const [rootId, setRootId] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ role: 'user' | 'agent'; text: string }[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  const startStream = (query: string, isMock: boolean = false) => {
-    setNodes({});
-    setRootId(null);
-    setMessages(prev => [...prev, { role: 'user', text: query }]);
-    setIsStreaming(true);
-
-    const es = new EventSource(`http://localhost:3001/api/stream?q=${encodeURIComponent(query)}&mock=${isMock}`);
-    eventSourceRef.current = es;
-
-    es.onerror = (e) => {
-      console.error('SSE Error:', e);
-      setIsStreaming(false);
-      es.close();
-    };
-
-    const handlers: Record<string, (data: any) => void> = {
-      session_start: (data) => {
-        console.log('Session Start:', data);
-      },
-      agent_start: (data) => {
+  const processEvent = (type: string, data: any) => {
+    switch (type) {
+      case 'session_start':
+        setError(null);
+        setCurrentSessionId(data.sessionId);
+        break;
+      case 'agent_start':
         setNodes(curr => {
           const newNode: AgentNode = {
             id: data.id,
@@ -71,116 +60,117 @@ export const useAgentStream = () => {
             artifacts: [],
             subAgents: []
           };
-          
           const updated: Record<string, AgentNode> = { ...curr, [data.id]: newNode };
-          
-          const parent = updated[data.parentId];
+          const parent = data.parentId ? updated[data.parentId] : undefined;
           if (data.parentId && parent) {
-            parent.subAgents = [...parent.subAgents, data.id];
+            updated[data.parentId] = { ...parent, subAgents: [...parent.subAgents, data.id] };
           } else if (!data.parentId) {
             setRootId(data.id);
           }
-          
           return updated;
         });
-      },
-      thinking: (data) => {
+        break;
+      case 'thinking':
+        setNodes(curr => curr[data.id] ? {
+          ...curr,
+          [data.id]: { ...curr[data.id], thinking: [...curr[data.id].thinking, data.text] }
+        } : curr);
+        break;
+      case 'tool_start':
+        setNodes(curr => curr[data.id] ? {
+          ...curr,
+          [data.id]: { ...curr[data.id], tools: [...curr[data.id].tools, { name: data.tool, input: data.input, output: '' }] }
+        } : curr);
+        break;
+      case 'tool_end':
         setNodes(curr => {
           if (!curr[data.id]) return curr;
-          return {
-            ...curr,
-            [data.id]: {
-              ...curr[data.id],
-              thinking: [...curr[data.id].thinking, data.text]
-            }
-          };
+          const tools = [...curr[data.id].tools];
+          const idx = tools.findIndex(t => t.name === data.tool && t.output === '');
+          if (idx !== -1) tools[idx] = { ...tools[idx], output: data.output };
+          return { ...curr, [data.id]: { ...curr[data.id], tools } };
         });
-      },
-      tool_start: (data) => {
-        setNodes(curr => {
-          if (!curr[data.id]) return curr;
-          return {
-            ...curr,
-            [data.id]: {
-              ...curr[data.id],
-              tools: [...curr[data.id].tools, { name: data.tool, input: data.input, output: '' }]
-            }
-          };
-        });
-      },
-      tool_end: (data) => {
-        setNodes(curr => {
-          if (!curr[data.id]) return curr;
-          const updatedTools = [...curr[data.id].tools];
-          const toolIndex = updatedTools.findIndex(t => t.name === data.tool && t.output === '');
-          if (toolIndex !== -1) {
-            updatedTools[toolIndex] = { ...updatedTools[toolIndex], output: data.output };
-          }
-          return {
-            ...curr,
-            [data.id]: {
-              ...curr[data.id],
-              tools: updatedTools
-            }
-          };
-        });
-      },
-      ask_user: (data) => {
-        setNodes(curr => ({
+        break;
+      case 'ask_user':
+        setNodes(curr => curr[data.id] ? ({
           ...curr,
           [data.id]: { ...curr[data.id], status: 'paused', question: data.question }
-        }));
-      },
-      user_answer: (data) => {
-        setNodes(curr => ({
+        }) : curr);
+        break;
+      case 'user_answer':
+        setNodes(curr => curr[data.id] ? ({
           ...curr,
           [data.id]: { ...curr[data.id], status: 'running', answer: data.answer }
-        }));
+        }) : curr);
         setMessages(prev => [...prev, { role: 'user', text: `Answer: ${data.answer}` }]);
-      },
-      agent_end: (data) => {
-        setNodes(curr => {
-          if (!curr[data.id]) return curr;
-          return {
-            ...curr,
-            [data.id]: { ...curr[data.id], status: 'completed', response: data.output }
-          };
-        });
-      },
-      agent_response: (data) => {
+        break;
+      case 'agent_response':
         setMessages(prev => [...prev, { role: 'agent', text: data.text }]);
-      },
-      artifact: (data) => {
-        setNodes(curr => {
-          if (!curr[data.id]) return curr;
-          return {
-            ...curr,
-            [data.id]: {
-              ...curr[data.id],
-              artifacts: [...curr[data.id].artifacts, { name: data.name, type: data.type, content: data.content }]
-            }
-          };
-        });
-      },
-      done: () => {
+        break;
+      case 'artifact':
+        setNodes(curr => curr[data.id] ? {
+          ...curr,
+          [data.id]: { ...curr[data.id], artifacts: [...curr[data.id].artifacts, { name: data.name, type: data.type, content: data.content }] }
+        } : curr);
+        break;
+      case 'done':
         setIsStreaming(false);
-        eventSourceRef.current?.close();
-      },
-      error: (data) => {
-        console.error('Agent Error:', data.message);
+        break;
+      case 'error':
+        setError(data.message);
         setMessages(prev => [...prev, { role: 'agent', text: `⚠️ Error: ${data.message}` }]);
         setIsStreaming(false);
-        eventSourceRef.current?.close();
-      }
-    };
-
-    Object.entries(handlers).forEach(([type, handler]) => {
-      es.addEventListener(type, (e) => {
-        const data = JSON.parse((e as any).data);
-        handler(data);
-      });
-    });
+        break;
+    }
   };
 
-  return { nodes, rootId, messages, isStreaming, startStream };
+  const startStream = (query: string, isMock: boolean = false) => {
+    setError(null);
+    setNodes({});
+    setRootId(null);
+    setMessages([{ role: 'user', text: query }]);
+    setIsStreaming(true);
+
+    const es = new EventSource(`http://localhost:3001/api/stream?q=${encodeURIComponent(query)}&mock=${isMock}`);
+    eventSourceRef.current = es;
+
+    ['session_start', 'agent_start', 'thinking', 'tool_start', 'tool_end', 'ask_user', 'user_answer', 'agent_response', 'artifact', 'done', 'error'].forEach(type => {
+      es.addEventListener(type, (e: any) => processEvent(type, JSON.parse(e.data)));
+    });
+
+    es.onerror = () => { es.close(); setIsStreaming(false); };
+  };
+
+  const submitAnswer = async (answer: string) => {
+    if (!currentSessionId) return;
+    setIsStreaming(true);
+
+    const response = await fetch('http://localhost:3001/api/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentSessionId, answer })
+    });
+
+    if (!response.body) return;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+      let currentEvent = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) currentEvent = line.replace('event: ', '');
+        if (line.startsWith('data: ')) {
+          const data = JSON.parse(line.replace('data: ', ''));
+          processEvent(currentEvent, data);
+        }
+      }
+    }
+    setIsStreaming(false);
+  };
+
+  return { nodes, rootId, messages, isStreaming, error, currentSessionId, startStream, submitAnswer };
 };

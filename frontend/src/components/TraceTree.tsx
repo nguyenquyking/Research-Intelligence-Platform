@@ -17,38 +17,40 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth, onSelectTool, o
   if (!node) return null;
 
   return (
-    <div className={`ml-${depth * 4} mt-2 border-l-2 border-gray-700 pl-4 transition-all opacity-0 animate-fade-in`}>
+    <div className={`mt-2 border-l border-white/5 ml-2 pl-4 transition-all animate-fade-in`}>
       <div 
-        className="flex items-center gap-2 cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors group"
+        className="flex items-center gap-3 cursor-pointer hover:bg-white/5 py-1.5 px-2 rounded-xl transition-all group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="text-gray-400 group-hover:text-white transition-colors">
-          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <div className="text-gray-600 group-hover:text-gray-300 transition-colors">
+          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </div>
         
         <div className={`
-          p-1 rounded-sm 
-          ${node.status === 'completed' ? 'text-green-400' : 
-            node.status === 'running' ? 'text-blue-400 animate-pulse' : 
-            node.status === 'paused' ? 'text-yellow-400' : 'text-gray-400'}
+          p-1.5 rounded-lg 
+          ${node.status === 'completed' ? 'text-green-500' : 
+            node.status === 'running' ? 'text-blue-500 animate-pulse' : 
+            node.status === 'paused' ? 'text-yellow-500' : 'text-gray-600'}
         `}>
-          {node.status === 'completed' ? <CheckCircle size={18} /> : 
-           node.status === 'running' ? <Loader2 size={18} className="animate-spin" /> : 
-           node.status === 'paused' ? <Pause size={18} /> : <Play size={18} />}
+          {node.status === 'completed' ? <CheckCircle size={14} /> : 
+           node.status === 'running' ? <Loader2 size={14} className="animate-spin" /> : 
+           node.status === 'paused' ? <Pause size={14} /> : <Play size={14} />}
         </div>
 
-        <span className="font-semibold text-gray-200">{node.name}</span>
-        <span className="text-xs text-gray-500 uppercase tracking-widest">{node.role}</span>
+        <div className="flex flex-col">
+          <span className="font-bold text-[11px] text-gray-200 uppercase tracking-wider">{node.name}</span>
+          <span className="text-[9px] text-gray-600 font-mono tracking-tight">{node.role}</span>
+        </div>
       </div>
 
       {isExpanded && (
-        <div className="mt-2 space-y-2">
-          {/* Thinking steps */}
+        <div className="mt-1 space-y-2 pb-1">
+          {/* Thinking steps - Subtle Terminal Style */}
           {node.thinking.length > 0 && (
-            <div className="bg-gray-800/50 rounded-md p-2 text-sm text-gray-400 italic">
+            <div className="space-y-1">
               {node.thinking.map((t, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <span className="text-gray-600">›</span> {t}
+                <div key={idx} className="thinking-step">
+                  {t}
                 </div>
               ))}
             </div>
@@ -56,54 +58,45 @@ const TraceNode: React.FC<TraceNodeProps> = ({ id, nodes, depth, onSelectTool, o
 
           {/* Tools */}
           {node.tools.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 px-1">
               {node.tools.map((tool, idx) => (
                 <div key={idx} 
                      onClick={(e) => { e.stopPropagation(); onSelectTool(tool.name, tool.output); }}
-                     className="bg-blue-900/20 border border-blue-800/50 rounded px-2 py-1 text-xs flex items-center gap-2 cursor-pointer hover:bg-blue-800/40">
-                  <Database size={12} className="text-blue-400" />
-                  <span className="text-blue-200">{tool.name}</span>
-                  {tool.output && <div className="w-1 h-1 bg-green-400 rounded-full" />}
+                     className="bg-blue-500/5 border border-blue-500/10 rounded-lg px-2.5 py-1 text-[10px] flex items-center gap-2 cursor-pointer hover:bg-blue-500/10 transition-all">
+                  <Database size={12} className="text-blue-500/50" />
+                  <span className="text-blue-400/80 font-bold">{tool.name}</span>
+                  {tool.output && <div className="w-1 h-1 bg-green-500/50 rounded-full" />}
                 </div>
               ))}
             </div>
           )}
 
-          {/* Artifacts */}
+          {/* Artifacts Summary */}
           {node.artifacts.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 px-1">
               {node.artifacts.map((art, idx) => (
                 <div key={idx} 
                      onClick={(e) => { e.stopPropagation(); onSelectArtifact(art.name, art.content); }}
-                     className="bg-indigo-900/20 border border-indigo-800/50 rounded px-2 py-1 text-xs flex items-center gap-2 cursor-pointer hover:bg-indigo-800/40 translate-y-0 hover:-translate-y-0.5 transition-transform duration-200">
-                  <FileText size={12} className="text-indigo-400" />
-                  <span className="text-indigo-200 font-medium">{art.name}</span>
-                  <div className="flex gap-0.5">
-                    <div className="w-1 h-1 bg-indigo-400 rounded-full animate-pulse" />
-                  </div>
+                     className="bg-indigo-500/5 border border-indigo-500/10 rounded-lg px-2.5 py-1 text-[10px] flex items-center gap-2 cursor-pointer hover:bg-indigo-500/10 transition-all">
+                  <FileText size={12} className="text-indigo-500/50" />
+                  <span className="text-indigo-400/80 font-bold">{art.name}</span>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Question/Answer */}
+          {/* Question/Answer - Minimalist Overlay */}
           {node.question && (
-            <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-md p-2 text-sm">
-              <div className="text-yellow-400 font-bold flex items-center gap-1 mb-1">
-                <Share2 size={14} /> Agent Question:
+            <div className="mx-1 bg-yellow-500/5 border border-yellow-500/10 rounded-xl p-2.5">
+              <div className="text-yellow-500/60 text-[9px] uppercase font-black tracking-widest flex items-center gap-1.5 mb-1.5">
+                <Share2 size={10} /> User Feedback Required
               </div>
-              <p className="text-yellow-100">{node.question}</p>
-              {node.answer && (
-                <div className="mt-2 pl-4 border-l border-yellow-600">
-                  <span className="text-gray-400">User: </span>
-                  <span className="text-white">{node.answer}</span>
-                </div>
-              )}
+              <p className="text-[11px] text-yellow-100/70 leading-relaxed italic">"{node.question}"</p>
             </div>
           )}
 
           {/* Children nodes (Recursive) */}
-          <div className="pt-2">
+          <div className="border-l border-white/5">
             {node.subAgents.map(childId => (
               <TraceNode 
                 key={childId} 
